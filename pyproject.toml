@@ -50,6 +50,9 @@ taintwatchd = "taintwatch.cli:watch_entry"
 
 [project.urls]
 Homepage = "https://github.com/braasdas/taintwatch"
+Repository = "https://github.com/braasdas/taintwatch"
+Issues = "https://github.com/braasdas/taintwatch/issues"
+Changelog = "https://github.com/braasdas/taintwatch/releases"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/taintwatch"]

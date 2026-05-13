@@ -8,6 +8,14 @@ from ..config import Config
 from ..models import Hit
 from ..paths import default_report_dir
 from .base import AlertChannel
+from .severity import Severity, classify
+
+
+_SEVERITY_BADGE = {
+    Severity.CRITICAL: "🚨 **CRITICAL** — compromised code is installed on disk and can execute on the next build/run",
+    Severity.HIGH: "⚠️  **HIGH** — compromised version pinned in a lockfile; next install will pull it",
+    Severity.INFO: "ℹ️  taintwatch",
+}
 
 
 class ReportChannel(AlertChannel):
@@ -16,18 +24,22 @@ class ReportChannel(AlertChannel):
     def __init__(self, cfg: Config) -> None:
         self.dir = cfg.alerts.report.dir or default_report_dir()
 
-    def send(self, hits: list[Hit]) -> None:
+    def send(self, hits: list[Hit], severity: Severity = Severity.HIGH) -> None:
         if not hits:
             return
         self.dir.mkdir(parents=True, exist_ok=True)
         ts = time.strftime("%Y%m%d-%H%M%S")
-        path = self.dir / f"hits-{ts}.md"
-        path.write_text(render_markdown(hits), encoding="utf-8")
+        path = self.dir / f"hits-{ts}-{severity.value}.md"
+        path.write_text(render_markdown(hits, severity), encoding="utf-8")
 
 
-def render_markdown(hits: list[Hit]) -> str:
+def render_markdown(hits: list[Hit], severity: Severity | None = None) -> str:
+    if severity is None:
+        severity = classify(hits)
     lines: list[str] = []
     lines.append(f"# taintwatch report — {time.strftime('%Y-%m-%d %H:%M:%S')}")
+    lines.append("")
+    lines.append(_SEVERITY_BADGE[severity])
     lines.append("")
     lines.append(f"**{len(hits)} new compromised-package hit{'s' if len(hits) != 1 else ''} found.**")
     lines.append("")

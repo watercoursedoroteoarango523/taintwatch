@@ -33,9 +33,18 @@ pipx install taintwatch        # recommended
 
 Then on first run:
 ```sh
-taintwatch config init
-taintwatch feeds update
-taintwatch scan
+taintwatch config init       # write a starter config
+taintwatch                   # launches the interactive TUI
+```
+
+The bare `taintwatch` command opens a full-screen interactive UI with menus for scanning, feed status, hit triage, and report browsing. Arrow keys to navigate, single-letter shortcuts (`s` scan, `u` feeds, `h` hits, `f` feeds status, `r` reports, `c` config, `q` quit). Press `enter` on a hit to see the full advisory + a copy-pastable remediation command.
+
+If you prefer one-shot CLI use (cron, scripts):
+```sh
+taintwatch scan              # one-shot scan, prints results, exits
+taintwatch feeds update      # refresh advisory feeds
+taintwatch watch             # foreground daemon loop
+taintwatch ui                # explicit alias for the TUI
 ```
 
 ## Three sound tiers

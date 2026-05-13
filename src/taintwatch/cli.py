@@ -37,9 +37,20 @@ from .state import (
 app = typer.Typer(
     name="taintwatch",
     help="Scan your codebases for known-compromised package versions.",
-    no_args_is_help=True,
+    no_args_is_help=False,         # bare `taintwatch` launches the TUI
+    invoke_without_command=True,
     add_completion=False,
 )
+
+
+@app.callback()
+def _root(ctx: typer.Context) -> None:
+    """If no subcommand was given, launch the interactive TUI."""
+    if ctx.invoked_subcommand is None:
+        from .tui import run as run_tui
+
+        run_tui()
+        raise typer.Exit()
 config_app = typer.Typer(help="Config file management.")
 feeds_app = typer.Typer(help="Feed management.")
 report_app = typer.Typer(help="Reports.")
@@ -215,6 +226,14 @@ def feeds_status() -> None:
         console.print(
             f"[{branding.STYLE_DIM}]advisories cached:[/] [{branding.STYLE_BRAND}]{count_advisories(conn)}[/]"
         )
+
+
+@app.command("ui")
+def ui_cmd() -> None:
+    """Launch the interactive TUI (same as bare `taintwatch`)."""
+    from .tui import run as run_tui
+
+    run_tui()
 
 
 @app.command("install-autostart")

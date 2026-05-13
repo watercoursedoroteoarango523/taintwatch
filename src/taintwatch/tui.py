@@ -153,14 +153,46 @@ MENU_ITEMS = [
 ]
 
 
-def _status_text(cfg: cfgmod.Config, n_advisories: int) -> Text:
+def _humanize_age(seconds: int | None) -> str:
+    if seconds is None:
+        return "never fetched"
+    if seconds < 60:
+        return f"{seconds}s ago"
+    if seconds < 3600:
+        return f"{seconds // 60}m ago"
+    if seconds < 86400:
+        return f"{seconds // 3600}h ago"
+    return f"{seconds // 86400}d ago"
+
+
+def _status_text(
+    cfg: cfgmod.Config,
+    n_advisories: int,
+    feed_age_seconds: int | None,
+    refreshing: bool = False,
+) -> Text:
     t = Text()
     t.append(f"{branding.SPIRAL} ", style=branding.STYLE_BRAND)
     t.append("taintwatch ", style=f"bold {branding.CREAM}")
     t.append(f"v{__version__}", style=branding.PIN_SOFT)
     t.append("   ")
-    t.append("advisories cached: ", style=branding.PIN_SOFT)
+    t.append("advisories: ", style=branding.PIN_SOFT)
     t.append(f"{n_advisories:,}", style=branding.STYLE_BRAND)
+    t.append("   ")
+    t.append("feeds: ", style=branding.PIN_SOFT)
+    if refreshing:
+        t.append("refreshing…", style=branding.STYLE_INFO)
+    elif feed_age_seconds is None:
+        t.append("never fetched", style=branding.STYLE_HIGH)
+    else:
+        # Color: green if <24h, amber if 24-72h, red if >72h.
+        if feed_age_seconds < 24 * 3600:
+            style = branding.STYLE_BRAND
+        elif feed_age_seconds < 72 * 3600:
+            style = branding.STYLE_HIGH
+        else:
+            style = branding.STYLE_CRITICAL
+        t.append(_humanize_age(feed_age_seconds), style=style)
     t.append("   ")
     t.append("roots: ", style=branding.PIN_SOFT)
     t.append(
@@ -184,11 +216,16 @@ class HomeScreen(Screen):
         Binding("q", "select('quit')", "Quit"),
     ]
 
+    def __init__(self) -> None:
+        super().__init__()
+        self._refreshing = False
+
     def compose(self) -> ComposeResult:
         cfg = self.app.cfg
         with open_db() as conn:
             n = count_advisories(conn)
-        yield Static(_status_text(cfg, n), id="status-bar")
+            age = feeds_mod.oldest_fetch_age_seconds(conn, cfg)
+        yield Static(_status_text(cfg, n, age, self._refreshing), id="status-bar")
         items = []
         for key, label, hot in MENU_ITEMS:
             text = Text()
@@ -202,6 +239,58 @@ class HomeScreen(Screen):
 
     def on_mount(self) -> None:
         self.query_one(ListView).focus()
+        self._maybe_kick_off_auto_refresh()
+        self._maybe_show_first_launch_prompt()
+
+    def _refresh_status_bar(self) -> None:
+        cfg = self.app.cfg
+        with open_db() as conn:
+            n = count_advisories(conn)
+            age = feeds_mod.oldest_fetch_age_seconds(conn, cfg)
+        bar = self.query_one("#status-bar", Static)
+        bar.update(_status_text(cfg, n, age, self._refreshing))
+
+    def _maybe_kick_off_auto_refresh(self) -> None:
+        """If feeds are stale, refresh them in a background thread silently."""
+        cfg = self.app.cfg
+        # Skip silent refresh if no feeds are enabled at all
+        if not (cfg.feeds.osv or cfg.feeds.openssf or cfg.feeds.aikido):
+            return
+        with open_db() as conn:
+            stale = feeds_mod.is_stale(conn, cfg)
+        if not stale:
+            return
+        self._refreshing = True
+        self._refresh_status_bar()
+        self._auto_refresh_feeds()
+
+    @work(thread=True, exclusive=True, group="auto-refresh")
+    def _auto_refresh_feeds(self) -> None:
+        cfg = self.app.cfg
+        with open_db() as conn:
+            feeds_mod.update_all(conn, cfg)
+        # Mutating state from a worker thread requires call_from_thread.
+        def _done():
+            self._refreshing = False
+            try:
+                self._refresh_status_bar()
+            except Exception:
+                pass
+
+        self.app.call_from_thread(_done)
+
+    def _maybe_show_first_launch_prompt(self) -> None:
+        marker = paths.first_launch_marker()
+        if marker.exists():
+            return
+        # Touch the marker now so we don't pop the modal twice if the user
+        # restarts the TUI without choosing.
+        try:
+            marker.parent.mkdir(parents=True, exist_ok=True)
+            marker.touch()
+        except OSError:
+            pass
+        self.app.push_screen(FirstLaunchPrompt())
 
     def action_select(self, key: str) -> None:
         self._go(key)
@@ -553,6 +642,62 @@ class FeedsScreen(Screen):
 
     def action_update(self) -> None:
         self.app.push_screen(ScanScreen(feeds_only=True))
+
+
+class FirstLaunchPrompt(ModalScreen):
+    """Shown once, on the very first TUI launch. Offers to register a daily
+    background scan via the per-OS scheduler (Windows Task Scheduler / launchd
+    / systemd-user). User can decline; we won't ask again.
+    """
+
+    BINDINGS = [
+        Binding("y", "yes", "Yes, daily"),
+        Binding("h", "hourly", "Hourly"),
+        Binding("n", "no", "Not now"),
+        Binding("escape", "no", "Not now"),
+    ]
+
+    def compose(self) -> ComposeResult:
+        md = (
+            f"# {branding.SPIRAL}  Welcome to taintwatch\n\n"
+            "**Feeds need to stay fresh.** Supply-chain malware lands and gets pulled "
+            "from registries within hours; a stale feed is a useless one.\n\n"
+            "taintwatch can register a background scan with your OS scheduler "
+            "(Windows Task Scheduler / macOS launchd / Linux systemd-user) so feeds "
+            "refresh and a scan runs automatically. Nothing else gets installed and "
+            "you can remove it any time with `taintwatch uninstall-autostart`.\n\n"
+            "**`y`** — install daily background scan (recommended)  \n"
+            "**`h`** — install hourly background scan  \n"
+            "**`n`** — not now (you can always run it manually: `taintwatch install-autostart`)\n"
+        )
+        yield Container(Markdown(md), id="detail")
+        yield Footer()
+
+    def action_yes(self) -> None:
+        self._install(60 * 24)
+
+    def action_hourly(self) -> None:
+        self._install(60)
+
+    def action_no(self) -> None:
+        self.app.pop_screen()
+
+    def _install(self, minutes: int) -> None:
+        try:
+            from .scheduler import get as get_scheduler
+
+            sch = get_scheduler()
+            msg = sch.install(minutes)
+        except Exception as e:  # noqa: BLE001
+            msg = f"could not install autostart: {e}"
+        self.app.pop_screen()
+        # Fire-and-forget toast-style notification at the top of the home screen
+        try:
+            screen = self.app.screen
+            if isinstance(screen, HomeScreen):
+                screen.notify(msg, severity="information")
+        except Exception:
+            pass
 
 
 # ── App ──────────────────────────────────────────────────────────────────────

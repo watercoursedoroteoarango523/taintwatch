@@ -41,6 +41,7 @@ class FeedsConfig:
     openssf: bool = True
     aikido: bool = True
     refresh_minutes: int = 30
+    max_age_hours: int = 24       # if feeds are older than this, auto-refresh on launch
 
 
 @dataclass
@@ -106,6 +107,7 @@ def load(path: Path | None = None) -> Config:
         openssf=bool(feeds_d.get("openssf", True)),
         aikido=bool(feeds_d.get("aikido", True)),
         refresh_minutes=int(feeds_d.get("refresh_minutes", 30)),
+        max_age_hours=int(feeds_d.get("max_age_hours", 24)),
     )
     discord_d = alerts_d.get("discord", {})
     toast_d = alerts_d.get("toast", {})
@@ -137,7 +139,8 @@ ecosystems = ["npm", "pypi", "cargo", "go", "rubygems"]
 osv = true
 openssf = true
 aikido = true                          # set false if your org requires redistributable-only feeds
-refresh_minutes = 30
+refresh_minutes = 30                   # daemon polling cadence
+max_age_hours = 24                     # if feeds are older than this on launch, auto-refresh in background
 
 [alerts.discord]
 webhook = ""                           # paste a Discord webhook URL to enable

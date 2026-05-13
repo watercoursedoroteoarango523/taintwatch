@@ -30,3 +30,10 @@ def default_report_dir() -> Path:
 
 def feeds_cache_dir() -> Path:
     return state_dir() / "feeds-cache"
+
+
+def first_launch_marker() -> Path:
+    """Touched once the TUI has been launched at least once (used to show the
+    autostart prompt on the very first run only).
+    """
+    return state_dir() / "first-launch-seen"

@@ -1,0 +1,63 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "taintwatch"
+version = "0.1.0"
+description = "Scan your codebases for known-compromised package versions. Yes, like the chalk thing. And the nx thing. And the tinycolor thing."
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+authors = [{ name = "benja" }]
+keywords = ["security", "supply-chain", "npm", "pypi", "malware", "audit"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Security",
+    "Topic :: Software Development :: Quality Assurance",
+]
+dependencies = [
+    "httpx>=0.27",
+    "typer>=0.12",
+    "rich>=13.7",
+    "packaging>=24.0",
+    "tomli>=2.0; python_version<'3.11'",
+    "platformdirs>=4.2",
+]
+
+[project.optional-dependencies]
+toast = [
+    "winotify>=1.1; sys_platform=='win32'",
+]
+dev = [
+    "pytest>=8.0",
+    "pytest-mock>=3.12",
+    "respx>=0.21",
+    "ruff>=0.4",
+]
+
+[project.scripts]
+taintwatch = "taintwatch.cli:app"
+taintwatchd = "taintwatch.cli:watch_entry"
+
+[project.urls]
+Homepage = "https://github.com/braasdas/taintwatch"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/taintwatch"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"

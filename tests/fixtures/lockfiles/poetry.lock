@@ -1,0 +1,13 @@
+[[package]]
+name = "ultralytics"
+version = "8.3.41"
+description = "ML model SDK"
+optional = false
+python-versions = ">=3.8"
+
+[[package]]
+name = "requests"
+version = "2.32.3"
+description = "HTTP for humans"
+optional = false
+python-versions = ">=3.7"

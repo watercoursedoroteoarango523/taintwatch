@@ -1,0 +1,4 @@
+# Sample requirements with pinned versions
+ultralytics==8.3.41
+requests==2.32.3
+Some-Package==1.0.0

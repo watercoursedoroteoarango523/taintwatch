@@ -1,18 +1,13 @@
 from __future__ import annotations
 
+from rich import box
 from rich.console import Console
 from rich.table import Table
 
+from .. import branding
 from ..models import Hit
 from .base import AlertChannel
 from .severity import Severity
-
-
-_TITLE_STYLE = {
-    Severity.CRITICAL: ("bold red", "CRITICAL — compromised code installed on disk"),
-    Severity.HIGH: ("bold yellow", "HIGH — compromised package in lockfile"),
-    Severity.INFO: ("bold cyan", "INFO"),
-}
 
 
 class StdoutChannel(AlertChannel):
@@ -24,20 +19,25 @@ class StdoutChannel(AlertChannel):
     def send(self, hits: list[Hit], severity: Severity = Severity.HIGH) -> None:
         if not hits:
             return
-        style, label = _TITLE_STYLE[severity]
-        table = Table(title=f"[{style}]taintwatch — {label}[/{style}]")
-        table.add_column("eco")
-        table.add_column("package")
-        table.add_column("version")
-        table.add_column("advisory")
-        table.add_column("repo")
-        table.add_column("source", style="red")
+        style, label = branding.SEVERITY_STYLE[severity.value]
+        table = Table(
+            title=f"[{style}]{label}[/]",
+            box=box.HEAVY,
+            border_style=branding.PIN_SOFT,
+            header_style=f"bold {branding.LIME}",
+            title_style=style,
+        )
+        table.add_column("eco", style=branding.PIN_SOFT)
+        table.add_column("package", style=branding.CREAM, no_wrap=True)
+        table.add_column("version", style=branding.CREAM)
+        table.add_column("advisory", style=branding.LIME_DIM)
+        table.add_column("repo", style=branding.CREAM)
+        table.add_column("source")
         for h in hits:
-            source_cell = (
-                "[bold red]installed[/bold red]"
-                if h.pkg.source == "installed"
-                else "lockfile"
-            )
+            if h.pkg.source == "installed":
+                source_cell = f"[bold {branding.DANGER}]{branding.PIN_GLYPH} installed[/]"
+            else:
+                source_cell = f"[{branding.WARN}]lockfile[/]"
             table.add_row(
                 h.pkg.ecosystem,
                 h.pkg.name,

@@ -6,9 +6,23 @@ from pathlib import Path
 from typing import Optional
 
 import typer
+from rich import box
 from rich.console import Console
 from rich.table import Table
 
+
+# Windows consoles default to cp1252; the brand spiral glyph and rich's box
+# characters need UTF-8. Reconfigure stdio at module load so output works the
+# same whether the user pipes us or runs interactively.
+if sys.platform == "win32":
+    for _stream in (sys.stdout, sys.stderr):
+        if hasattr(_stream, "reconfigure"):
+            try:
+                _stream.reconfigure(encoding="utf-8", errors="replace")
+            except Exception:
+                pass
+
+from . import branding
 from . import config as cfgmod
 from . import feeds, paths
 from .alerts import dispatch_new_hits
@@ -50,6 +64,7 @@ def scan(
     root: list[Path] = typer.Option(None, "--root", "-r", help="Override config roots (repeatable)."),
     deep: Optional[bool] = typer.Option(None, "--deep/--no-deep", help="Also walk node_modules / site-packages."),
     update_feeds: bool = typer.Option(True, "--update-feeds/--skip-update", help="Refresh feeds before scanning."),
+    quiet: bool = typer.Option(False, "--quiet", "-q", help="Suppress banner; only output results."),
 ) -> None:
     """Run one scan cycle: optionally refresh feeds, then scan all roots, then alert on new hits."""
     cfg = _load()
@@ -58,38 +73,50 @@ def scan(
     if deep is not None:
         cfg.scan.deep_scan = deep
 
+    if not quiet:
+        branding.banner(console)
+
     if not cfg.scan.roots:
-        console.print("[red]No scan roots configured.[/red] Run `taintwatch config init`.")
+        console.print(f"[{branding.STYLE_CRITICAL}]No scan roots configured.[/] Run `taintwatch config init`.")
         raise typer.Exit(2)
 
     with open_db() as conn:
         if update_feeds:
-            console.print("[bold]Updating feeds…[/bold]")
+            console.print(f"[{branding.STYLE_DIM}]{branding.SPIRAL}[/] updating feeds…")
             results = feeds.update_all(conn, cfg)
             for k, v in results.items():
-                console.print(f"  [cyan]{k}[/cyan]: {v}")
-            console.print(f"  total advisories cached: [bold]{count_advisories(conn)}[/bold]")
+                console.print(f"  [{branding.LIME_DIM}]{k}[/]: [{branding.CREAM}]{v}[/]")
+            console.print(
+                f"  [{branding.STYLE_DIM}]advisories cached:[/] [{branding.STYLE_BRAND}]{count_advisories(conn)}[/]"
+            )
 
-        console.print(f"[bold]Scanning {len(cfg.scan.roots)} root(s)…[/bold] deep={cfg.scan.deep_scan}")
+        console.print(
+            f"[{branding.STYLE_DIM}]{branding.SPIRAL}[/] scanning [{branding.STYLE_BRAND}]{len(cfg.scan.roots)}[/] root(s) "
+            f"[{branding.STYLE_DIM}]deep={cfg.scan.deep_scan}[/]"
+        )
         t0 = time.time()
         run_id, all_hits, new_keys = run_scan(conn, cfg)
         dt = time.time() - t0
         new_hits = [h for h in all_hits if (h.advisory_id, str(h.pkg.repo_path), h.pkg.version) in new_keys]
 
-        console.print(
-            f"[green]Scan #{run_id} done in {dt:.1f}s — {len(all_hits)} total hit(s), [bold]{len(new_hits)} new[/bold].[/green]"
-        )
-
         if not new_hits:
-            console.print("[green]No new compromised packages found.[/green]")
+            console.print(
+                f"[{branding.STYLE_CLEAN}]{branding.SPIRAL} clean[/] "
+                f"[{branding.STYLE_DIM}]scan #{run_id} · {dt:.1f}s · {len(all_hits)} known matched · 0 new[/]"
+            )
             return
+
+        console.print(
+            f"[{branding.STYLE_CRITICAL}]{branding.PIN_ARROW} {len(new_hits)} new hit(s)[/] "
+            f"[{branding.STYLE_DIM}]scan #{run_id} · {dt:.1f}s · {len(all_hits)} total matched[/]"
+        )
 
         sent = dispatch_new_hits(conn, cfg, all_hits, new_keys)
         for ch, n in sent.items():
             if n == -1:
-                console.print(f"  alert channel [red]{ch}[/red]: error")
+                console.print(f"  [{branding.STYLE_CRITICAL}]{ch}: error[/]")
             else:
-                console.print(f"  alert channel [cyan]{ch}[/cyan]: {n} sent")
+                console.print(f"  [{branding.LIME_DIM}]{ch}[/]: [{branding.CREAM}]{n} sent[/]")
 
 
 @app.command()
@@ -97,10 +124,13 @@ def watch() -> None:
     """Foreground daemon: loop, refresh feeds, scan, sleep, repeat."""
     cfg = _load()
     if not cfg.scan.roots:
-        console.print("[red]No scan roots configured.[/red]")
+        console.print(f"[{branding.STYLE_CRITICAL}]No scan roots configured.[/]")
         raise typer.Exit(2)
+    branding.banner(console)
     interval = max(60, cfg.daemon.interval_minutes * 60)
-    console.print(f"[bold]taintwatch watch[/bold] — every {cfg.daemon.interval_minutes}m. Ctrl-C to stop.")
+    console.print(
+        f"[{branding.STYLE_DIM}]watch loop · every {cfg.daemon.interval_minutes}m · Ctrl-C to stop[/]"
+    )
     try:
         while True:
             with open_db() as conn:
@@ -110,15 +140,21 @@ def watch() -> None:
                     h for h in all_hits
                     if (h.advisory_id, str(h.pkg.repo_path), h.pkg.version) in new_keys
                 ]
+                glyph = (
+                    f"[{branding.STYLE_CRITICAL}]{branding.PIN_ARROW}[/]"
+                    if new_hits
+                    else f"[{branding.STYLE_CLEAN}]{branding.SPIRAL}[/]"
+                )
                 console.print(
-                    f"[dim]{time.strftime('%H:%M:%S')}[/dim] scan #{run_id}: "
-                    f"{len(all_hits)} total, {len(new_hits)} new"
+                    f"[{branding.STYLE_DIM}]{time.strftime('%H:%M:%S')}[/] {glyph} "
+                    f"scan #{run_id} · [{branding.CREAM}]{len(all_hits)}[/] matched · "
+                    f"[{branding.STYLE_BRAND}]{len(new_hits)} new[/]"
                 )
                 if new_hits:
                     dispatch_new_hits(conn, cfg, all_hits, new_keys)
             time.sleep(interval)
     except KeyboardInterrupt:
-        console.print("[yellow]watch stopped.[/yellow]")
+        console.print(f"[{branding.WARN}]watch stopped.[/]")
 
 
 def watch_entry() -> None:
@@ -163,15 +199,22 @@ def feeds_status() -> None:
     """Show last-fetched timestamps and status per feed."""
     with open_db() as conn:
         rows = get_feeds_status(conn)
-        table = Table(title="feeds")
-        table.add_column("name")
-        table.add_column("last_fetched")
-        table.add_column("status")
+        table = Table(
+            title=f"[{branding.STYLE_BRAND}]{branding.SPIRAL} feeds[/]",
+            box=box.HEAVY,
+            border_style=branding.PIN_SOFT,
+            header_style=f"bold {branding.LIME}",
+        )
+        table.add_column("name", style=branding.LIME_DIM)
+        table.add_column("last_fetched", style=branding.CREAM)
+        table.add_column("status", style=branding.CREAM)
         for r in rows:
             ts = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(r["last_fetched"])) if r["last_fetched"] else "—"
             table.add_row(r["name"], ts, r["status"] or "—")
         console.print(table)
-        console.print(f"total advisories cached: [bold]{count_advisories(conn)}[/bold]")
+        console.print(
+            f"[{branding.STYLE_DIM}]advisories cached:[/] [{branding.STYLE_BRAND}]{count_advisories(conn)}[/]"
+        )
 
 
 @app.command("install-autostart")

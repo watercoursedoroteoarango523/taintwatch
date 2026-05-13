@@ -1,6 +1,13 @@
-# taintwatch
+<p align="center">
+  <img src="assets/taintwatch-logo.png" alt="taintwatch logo — a cream spiral with one tainted lime-green petal pierced by a black pin" width="260" />
+</p>
 
-> Your dependencies are tainted. So is everyone else's logo.
+<h1 align="center">taintwatch</h1>
+
+<p align="center"><em>Your dependencies are tainted. So is everyone else's logo.</em></p>
+
+---
+
 
 `taintwatch` scans your local codebases for **known-compromised package versions** — the ones from Shai-Hulud, chalk/debug, Nx s1ngularity, Ultralytics, and the next one that lands tomorrow morning while you're asleep. It pulls real-time feeds from OSV.dev (`MAL-*` records), the OpenSSF malicious-packages repository, and Aikido Intel; matches every lockfile and every installed `node_modules` / `site-packages` directory under the roots you configure; and yells at you on Discord or via a desktop toast when one of your repos has malware on disk.
 

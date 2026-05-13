@@ -12,9 +12,9 @@ from .severity import Severity, classify
 
 
 _SEVERITY_BADGE = {
-    Severity.CRITICAL: "🚨 **CRITICAL** — compromised code is installed on disk and can execute on the next build/run",
-    Severity.HIGH: "⚠️  **HIGH** — compromised version pinned in a lockfile; next install will pull it",
-    Severity.INFO: "ℹ️  taintwatch",
+    Severity.CRITICAL: "◉⟶ **CRITICAL** — compromised code is installed on disk and can execute on the next build/run",
+    Severity.HIGH: "◉⟶ **HIGH** — compromised version pinned in a lockfile; next install will pull it",
+    Severity.INFO: "⌬  taintwatch",
 }
 
 

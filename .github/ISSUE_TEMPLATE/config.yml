@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability in taintwatch
+    url: https://github.com/braasdas/taintwatch/security/advisories/new
+    about: Don't file a public issue for a security bug in taintwatch. See SECURITY.md.
+  - name: Malicious package in the wild (not a taintwatch bug)
+    url: https://github.com/ossf/malicious-packages
+    about: Reports about malicious packages on npm/PyPI/etc. go upstream to OpenSSF malicious-packages.

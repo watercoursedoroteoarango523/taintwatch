@@ -1,0 +1,24 @@
+name: Feature request
+description: Something taintwatch should do that it doesn't.
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What would you like taintwatch to do?
+    validations:
+      required: true
+
+  - type: textarea
+    id: why
+    attributes:
+      label: Why does this matter?
+      description: The use case, not the implementation. "I want to scan Maven projects because my team has ten of them" is more useful than "add Maven support."
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you've considered
+      description: Are there workarounds today? Does an existing tool do this?

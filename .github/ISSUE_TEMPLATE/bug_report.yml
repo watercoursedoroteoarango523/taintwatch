@@ -1,0 +1,53 @@
+name: Bug report
+description: Something taintwatch did wrong — false positive, false negative, crash, hang, weird output.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. Please run `taintwatch --version` and `taintwatch feeds status` and include the output below.
+
+        **For false positives:** include the advisory ID (`MAL-...` or `GHSA-...`), the package name + version it incorrectly matched, and the lockfile snippet.
+
+        **For security issues IN taintwatch itself:** stop and read [SECURITY.md](../../SECURITY.md). Do not file a public issue.
+
+  - type: input
+    id: version
+    attributes:
+      label: taintwatch version
+      placeholder: "v0.1.0"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: OS
+      options:
+        - Windows
+        - macOS
+        - Linux
+        - Other (specify below)
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: Steps to reproduce. The shorter and more specific, the faster this gets fixed.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Output / logs
+      render: shell
